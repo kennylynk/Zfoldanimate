@@ -1,84 +1,68 @@
 package com.example.foldanim
 
-import android.animation.ValueAnimator
-import android.graphics.RenderEffect
-import android.graphics.Shader
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.view.View
-import android.view.animation.AccelerateDecelerateInterpolator
+import android.provider.Settings
+import android.widget.Button
+import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.animation.doOnEnd
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.repeatOnLifecycle
-import androidx.window.layout.FoldingFeature
-import androidx.window.layout.WindowInfoTracker
-import androidx.window.layout.WindowLayoutInfo
-import kotlinx.coroutines.launch
-import kotlin.math.sin
 
 class MainActivity : AppCompatActivity() {
 
-    private var lastFoldState: FoldingFeature.State? = null
+    private val notifPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startOverlayService()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.STARTED) {
-                WindowInfoTracker.getOrCreate(this@MainActivity)
-                    .windowLayoutInfo(this@MainActivity)
-                    .collect { info -> handleLayoutInfo(info) }
-            }
+        findViewById<Button>(R.id.btnStart).setOnClickListener {
+            requestOverlayPermissionIfNeeded()
+        }
+        findViewById<Button>(R.id.btnStop).setOnClickListener {
+            stopService(Intent(this, OverlayService::class.java))
         }
     }
 
-    private fun handleLayoutInfo(info: WindowLayoutInfo) {
-        val folding = info.displayFeatures
-            .filterIsInstance<FoldingFeature>()
-            .firstOrNull() ?: return
-
-        if (folding.state != lastFoldState) {
-            lastFoldState = folding.state
-            playTransition()
-        }
+    override fun onResume() {
+        super.onResume()
+        val granted = Settings.canDrawOverlays(this)
+        findViewById<TextView>(R.id.tvStatus).text =
+            if (granted) "Quyền overlay: đã cấp" else "Quyền overlay: chưa cấp"
     }
 
-    private fun playTransition() {
-        val outer = findViewById<View>(R.id.layoutOuter)
-        val inner = findViewById<View>(R.id.layoutInner)
-
-        val showingInner = inner.alpha > 0.5f
-        val fadeOutView = if (showingInner) inner else outer
-        val fadeInView = if (showingInner) outer else inner
-        fadeInView.bringToFront()
-
-        val animator = ValueAnimator.ofFloat(0f, 1f)
-        animator.duration = 420
-        animator.interpolator = AccelerateDecelerateInterpolator()
-
-        animator.addUpdateListener { anim ->
-            val t = anim.animatedValue as Float
-            fadeOutView.alpha = 1f - t
-            fadeInView.alpha = t
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val blurRadius = (14f * sin(t * Math.PI)).toFloat().coerceAtLeast(0.01f)
-                val effect = RenderEffect.createBlurEffect(blurRadius, blurRadius, Shader.TileMode.CLAMP)
-                fadeOutView.setRenderEffect(effect)
-                fadeInView.setRenderEffect(effect)
+    private fun requestOverlayPermissionIfNeeded() {
+        if (!Settings.canDrawOverlays(this)) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            startActivity(intent)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val notifGranted = checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+            if (!notifGranted) {
+                notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                return
             }
         }
+        startOverlayService()
+    }
 
-        animator.doOnEnd {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                fadeOutView.setRenderEffect(null)
-                fadeInView.setRenderEffect(null)
-            }
+    private fun startOverlayService() {
+        val intent = Intent(this, OverlayService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent)
+        } else {
+            startService(intent)
         }
-
-        animator.start()
     }
 }
