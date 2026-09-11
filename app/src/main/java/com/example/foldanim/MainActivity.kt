@@ -6,21 +6,21 @@ import androidx.activity.compose.setContent
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color // <-- Thêm import này để sửa lỗi Unresolved reference
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlin.math.pow
 
 class MainActivity : ComponentActivity() {
@@ -34,14 +34,12 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun DuoFoldScreen() {
+    // Góc gập mặc định ban đầu là 90 độ để thấy ngay hiệu ứng 3D
     var userControlledAngle by remember { mutableFloatStateOf(90f) }
-    var isUserInteracting by remember { mutableStateOf(false) }
 
+    // Hỗ trợ vuốt tay trực tiếp trên màn hình để kéo mở / gập 3D
     val interactiveModifier = Modifier.pointerInput(Unit) {
         detectDragGestures(
-            onDragStart = { isUserInteracting = true },
-            onDragEnd = { isUserInteracting = false },
-            onDragCancel = { isUserInteracting = false },
             onDrag = { change, dragAmount ->
                 change.consume()
                 userControlledAngle = (userControlledAngle + (dragAmount.x / 3f)).coerceIn(0f, 180f)
@@ -49,6 +47,7 @@ fun DuoFoldScreen() {
         )
     }
 
+    // Nội suy mượt mà chuyển động
     val smoothAngle by animateFloatAsState(
         targetValue = userControlledAngle,
         animationSpec = spring(
@@ -79,6 +78,7 @@ fun DuoFoldScreen() {
                     scaleY = globalScale
                 }
         ) {
+            // NỬA TRÁI 3D (Màu xanh dương)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -86,18 +86,20 @@ fun DuoFoldScreen() {
                     .graphicsLayer {
                         rotationY = leftRotation
                         transformOrigin = TransformOrigin(1f, 0.5f)
-                        cameraDistance = 16f * density
+                        cameraDistance = 8f * density
                     }
+                    .background(Color(0xFF1E88E5)),
+                contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = android.R.drawable.sym_def_app_icon),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.CenterStart,
-                    modifier = Modifier.fillMaxSize(2f)
+                Text(
+                    text = "TRÁI",
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
 
+            // NỬA PHẢI 3D (Màu xanh lá)
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -105,23 +107,25 @@ fun DuoFoldScreen() {
                     .graphicsLayer {
                         rotationY = rightRotation
                         transformOrigin = TransformOrigin(0f, 0.5f)
-                        cameraDistance = 16f * density
+                        cameraDistance = 8f * density
                     }
+                    .background(Color(0xFF43A047)),
+                contentAlignment = Alignment.Center
             ) {
-                Image(
-                    painter = painterResource(id = android.R.drawable.sym_def_app_icon),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    alignment = Alignment.CenterEnd,
-                    modifier = Modifier.fillMaxSize(2f)
+                Text(
+                    text = "PHẢI",
+                    color = Color.White,
+                    fontSize = 32.sp,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
 
+        // BÓNG ĐỔ NẾP GẤP Ở GIỮA
         Box(
             modifier = Modifier
                 .fillMaxHeight()
-                .width(100.dp)
+                .width(40.dp)
                 .graphicsLayer { alpha = shadowAlpha }
                 .background(
                     Brush.horizontalGradient(
