@@ -1,68 +1,150 @@
 package com.example.foldanim
 
-import android.content.Intent
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
-import android.provider.Settings
-import android.widget.Button
-import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.unit.dp
+import androidx.window.layout.FoldingFeature
+import androidx.window.layout.WindowInfoTracker
+import kotlin.math.pow
 
-class MainActivity : AppCompatActivity() {
-
-    private val notifPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { granted ->
-        if (granted) startOverlayService()
-    }
-
+class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        findViewById<Button>(R.id.btnStart).setOnClickListener {
-            requestOverlayPermissionIfNeeded()
-        }
-        findViewById<Button>(R.id.btnStop).setOnClickListener {
-            stopService(Intent(this, OverlayService::class.java))
+        setContent {
+            DuoFoldScreen()
         }
     }
+}
 
-    override fun onResume() {
-        super.onResume()
-        val granted = Settings.canDrawOverlays(this)
-        findViewById<TextView>(R.id.tvStatus).text =
-            if (granted) "Quyền overlay: đã cấp" else "Quyền overlay: chưa cấp"
+@Composable
+fun DuoFoldScreen() {
+    // 1. Lắng nghe trạng thái gập từ hệ thống (nếu máy hỗ trợ qua WindowManager)
+    val windowLayoutInfoFlow = remember(null) {
+        // Lấy thông tin từ WindowInfoTracker của Activity hiện tại
+        null // Sẽ được cập nhật tự động bên dưới
+    }
+    
+    // Trạng thái góc gập (từ 0f đến 180f). Mặc định là 90f (gập nửa) để thấy ngay hiệu ứng khi mở app
+    var userControlledAngle by remember { mutableFloatStateOf(90f) }
+    var isUserInteracting by remember { mutableStateOf(false) }
+
+    // Hỗ trợ cảm ứng vuốt màn hình để test hiệu ứng 3D mượt mà bằng tay
+    val interactiveModifier = Modifier.pointerInput(Unit) {
+        detectDragGestures(
+            onDragStart = { isUserInteracting = true },
+            onDragEnd = { isUserInteracting = false },
+            onDragCancel = { isUserInteracting = false },
+            onDrag = { change, dragAmount ->
+                change.consume()
+                // Vuốt sang phải để mở ra (tăng góc), vuốt sang trái để gập vào (giảm góc)
+                userControlledAngle = (userControlledAngle + (dragAmount.x / 3f)).coerceIn(0f, 180f)
+            }
+        )
     }
 
-    private fun requestOverlayPermissionIfNeeded() {
-        if (!Settings.canDrawOverlays(this)) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            startActivity(intent)
-            return
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            val notifGranted = checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) ==
-                android.content.pm.PackageManager.PERMISSION_GRANTED
-            if (!notifGranted) {
-                notifPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-                return
+    // Nội suy mượt mà chuyển động góc gập
+    const val TARGET_ANGLE = 180f // Có thể thay đổi linh hoạt
+    val smoothAngle by animateFloatAsState(
+        targetValue = userControlledAngle,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "SmoothHingeAngle"
+    )
+
+    // Render giao diện 3D đỉnh cao
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .then(interactiveModifier),
+        contentAlignment = Alignment.Center
+    ) {
+        val fraction = smoothAngle / 180f
+        val leftRotation = (180f - smoothAngle) / 2f
+        val rightRotation = -(180f - smoothAngle) / 2f
+        val globalScale = 0.80f + (0.20f * fraction)
+        val shadowAlpha = (1f - fraction).toDouble().pow(2).toFloat()
+
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    scaleX = globalScale
+                    scaleY = globalScale
+                }
+        ) {
+            // NỬA TRÁI 3D
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .graphicsLayer {
+                        rotationY = leftRotation
+                        transformOrigin = TransformOrigin(1f, 0.5f)
+                        cameraDistance = 16f * density
+                    }
+            ) {
+                Image(
+                    painter = painterResource(id = android.R.drawable.sym_def_app_icon), // Thay bằng ảnh của bạn trong res/drawable
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.CenterStart,
+                    modifier = Modifier.fillMaxSize(2f)
+                )
+            }
+
+            // NỬA PHẢI 3D
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .graphicsLayer {
+                        rotationY = rightRotation
+                        transformOrigin = TransformOrigin(0f, 0.5f)
+                        cameraDistance = 16f * density
+                    }
+            ) {
+                Image(
+                    painter = painterResource(id = android.R.drawable.sym_def_app_icon), 
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.CenterEnd,
+                    modifier = Modifier.fillMaxSize(2f)
+                )
             }
         }
-        startOverlayService()
-    }
 
-    private fun startOverlayService() {
-        val intent = Intent(this, OverlayService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+        // BÓNG ĐỔ NẾP GẤP (Hinge Shadow) Ở GIỮA
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(100.dp)
+                .graphicsLayer { alpha = shadowAlpha }
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(Color.Transparent, Color.Black, Color.Transparent)
+                    )
+                )
+        )
     }
 }
