@@ -14,15 +14,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Color // <-- Thêm import này để sửa lỗi Unresolved reference
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
-import androidx.window.layout.FoldingFeature
-import androidx.window.layout.WindowInfoTracker
 import kotlin.math.pow
 
 class MainActivity : ComponentActivity() {
@@ -36,17 +34,9 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun DuoFoldScreen() {
-    // 1. Lắng nghe trạng thái gập từ hệ thống (nếu máy hỗ trợ qua WindowManager)
-    val windowLayoutInfoFlow = remember(null) {
-        // Lấy thông tin từ WindowInfoTracker của Activity hiện tại
-        null // Sẽ được cập nhật tự động bên dưới
-    }
-    
-    // Trạng thái góc gập (từ 0f đến 180f). Mặc định là 90f (gập nửa) để thấy ngay hiệu ứng khi mở app
     var userControlledAngle by remember { mutableFloatStateOf(90f) }
     var isUserInteracting by remember { mutableStateOf(false) }
 
-    // Hỗ trợ cảm ứng vuốt màn hình để test hiệu ứng 3D mượt mà bằng tay
     val interactiveModifier = Modifier.pointerInput(Unit) {
         detectDragGestures(
             onDragStart = { isUserInteracting = true },
@@ -54,14 +44,11 @@ fun DuoFoldScreen() {
             onDragCancel = { isUserInteracting = false },
             onDrag = { change, dragAmount ->
                 change.consume()
-                // Vuốt sang phải để mở ra (tăng góc), vuốt sang trái để gập vào (giảm góc)
                 userControlledAngle = (userControlledAngle + (dragAmount.x / 3f)).coerceIn(0f, 180f)
             }
         )
     }
 
-    // Nội suy mượt mà chuyển động góc gập
-    const val TARGET_ANGLE = 180f // Có thể thay đổi linh hoạt
     val smoothAngle by animateFloatAsState(
         targetValue = userControlledAngle,
         animationSpec = spring(
@@ -71,7 +58,6 @@ fun DuoFoldScreen() {
         label = "SmoothHingeAngle"
     )
 
-    // Render giao diện 3D đỉnh cao
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -93,7 +79,6 @@ fun DuoFoldScreen() {
                     scaleY = globalScale
                 }
         ) {
-            // NỬA TRÁI 3D
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -105,7 +90,7 @@ fun DuoFoldScreen() {
                     }
             ) {
                 Image(
-                    painter = painterResource(id = android.R.drawable.sym_def_app_icon), // Thay bằng ảnh của bạn trong res/drawable
+                    painter = painterResource(id = android.R.drawable.sym_def_app_icon),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     alignment = Alignment.CenterStart,
@@ -113,7 +98,6 @@ fun DuoFoldScreen() {
                 )
             }
 
-            // NỬA PHẢI 3D
             Box(
                 modifier = Modifier
                     .weight(1f)
@@ -125,7 +109,7 @@ fun DuoFoldScreen() {
                     }
             ) {
                 Image(
-                    painter = painterResource(id = android.R.drawable.sym_def_app_icon), 
+                    painter = painterResource(id = android.R.drawable.sym_def_app_icon),
                     contentDescription = null,
                     contentScale = ContentScale.Crop,
                     alignment = Alignment.CenterEnd,
@@ -134,7 +118,6 @@ fun DuoFoldScreen() {
             }
         }
 
-        // BÓNG ĐỔ NẾP GẤP (Hinge Shadow) Ở GIỮA
         Box(
             modifier = Modifier
                 .fillMaxHeight()
